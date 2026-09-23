@@ -1,0 +1,84 @@
+.section ".data"
+msg_prompt: .asciiz "Ingrese un numero o palabra: "
+msg_yes: .asciiz "\r\nEs palindromo\r\n"
+msg_no: .asciiz "\r\nNo es palindromo\r\n"
+buffer: .pad 100 0
+
+.section ".text"
+    // Inicializacion de $sp
+    orh $sp, $zero, 0
+    ori $sp, $sp, 0xFFC
+    
+    // Puntero MMIO a $s0 = 0xFFFFFF00 (-0x100)
+    orh $s0, $zero, 0xFFFF
+    ori $s0, $s0, 0xFF00
+    
+    // Imprimir el prompt
+    orh $a0, $zero, .hi16 msg_prompt
+    ori $a0, $a0, .lo16 msg_prompt
+    jal print_string
+
+    // Prepararse para leer
+    orh $s1, $zero, .hi16 buffer
+    ori $s1, $s1, .lo16 buffer
+    add $s2, $s1, $zero // $s2 guardara el inicio del buffer
+
+read_loop:
+    lbu $t0, 0($s0)
+    beq $t0, $zero, read_loop
+    addi $t1, $zero, 0xFF
+    beq $t0, $t1, read_loop
+    
+    // Revisar \n (10) o \r (13)
+    addi $t1, $zero, 10
+    beq $t0, $t1, end_read
+    addi $t1, $zero, 13
+    beq $t0, $t1, end_read
+    
+    // Echo a la terminal
+    sb $t0, 0($s0)
+    
+    // Guardar en el buffer
+    sb $t0, 0($s1)
+    addi $s1, $s1, 1
+    j read_loop
+
+end_read:
+    addi $s3, $s1, -1 // $s3 apunta al ultimo caracter valido
+
+check_pal_loop:
+    bge $s2, $s3, is_pal
+    
+    lbu $t0, 0($s2)
+    lbu $t1, 0($s3)
+    
+    bne $t0, $t1, not_pal
+    
+    addi $s2, $s2, 1
+    addi $s3, $s3, -1
+    j check_pal_loop
+    
+is_pal:
+    orh $a0, $zero, .hi16 msg_yes
+    ori $a0, $a0, .lo16 msg_yes
+    jal print_string
+    j end_prog
+
+not_pal:
+    orh $a0, $zero, .hi16 msg_no
+    ori $a0, $a0, .lo16 msg_no
+    jal print_string
+    
+end_prog:
+    trap 1
+
+print_string:
+    add $t0, $a0, $zero
+print_loop:
+    lbu $t1, 0($t0)
+    beq $t1, $zero, print_end
+    sb $t1, 0($s0)
+    addi $t0, $t0, 1
+    j print_loop
+print_end:
+    jr $ra, 0
